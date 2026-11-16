@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Company Data Portal</title>
+<style>
+:root{--navy:#14213d;--blue:#2563eb;--bg:#f3f6fb;--muted:#64748b;--line:#e2e8f0;--red:#b91c1c;--green:#15803d}
+*{box-sizing:border-box}body{margin:0;font-family:Arial,Helvetica,sans-serif;background:var(--bg);color:#172033}
+header{background:var(--navy);color:#fff;padding:20px 6%;display:flex;justify-content:space-between;align-items:center;gap:16px}
+header h1{font-size:20px;margin:0}header small{color:#cbd5e1}
+main{max-width:1100px;margin:36px auto;padding:0 18px}
+.panel{background:#fff;border:1px solid var(--line);border-radius:14px;padding:24px;box-shadow:0 8px 24px rgba(15,23,42,.05);margin-bottom:20px}
+.login{max-width:430px;margin:55px auto}.hidden{display:none!important}
+h2{margin:0 0 8px;font-size:22px}.sub{color:var(--muted);margin:0 0 22px;line-height:1.5}
+label{display:block;font-weight:600;font-size:14px;margin:15px 0 7px}
+input,select{width:100%;padding:12px;border:1px solid #cbd5e1;border-radius:8px;font-size:15px;background:white}
+button{border:0;border-radius:8px;padding:12px 18px;background:var(--blue);color:white;font-weight:700;cursor:pointer}
+button:disabled{opacity:.55;cursor:wait}.secondary{background:#e8eef8;color:var(--navy)}
+.actions{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:18px}
+.topline{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+.status{padding:12px 14px;border-radius:8px;background:#eff6ff;color:#1e40af;margin-top:16px;white-space:pre-wrap;line-height:1.5}
+.status.error{background:#fef2f2;color:var(--red)}.status.success{background:#f0fdf4;color:var(--green)}
+.tablewrap{overflow:auto;margin-top:18px}table{border-collapse:collapse;width:100%;font-size:14px}
+th,td{border-bottom:1px solid var(--line);padding:11px;text-align:left;white-space:nowrap}th{background:#f8fafc}
+.empty{color:var(--muted);padding:22px;text-align:center}
+.note{font-size:13px;color:var(--muted);line-height:1.5;margin-top:14px}
+code{background:#eef2ff;padding:2px 5px;border-radius:4px}
+</style>
+</head>
+<body>
+<header>
+  <div><h1>Company Data Portal</h1><small>Role-based employee information</small></div>
+  <div id="userInfo" class="hidden"><span id="who"></span> &nbsp; <button class="secondary" id="logoutBtn">Sign out</button></div>
+</header>
+<main>
+  <section id="loginPanel" class="panel login">
+    <h2>Sign in</h2><p class="sub">Use your employee or manager demo credentials.</p>
+    <form id="loginForm">
+      <label for="employeeId">Employee ID</label><input id="employeeId" autocomplete="username" required placeholder="E001">
+      <label for="password">Password</label><input id="password" type="password" autocomplete="current-password" required placeholder="Enter password">
+      <div class="actions"><button type="submit">Sign in</button></div>
+    </form>
+    <p class="note">Demo employee: E001 / employee123<br>Demo manager: E002 / manager123</p>
+    <div id="loginMessage" class="status hidden"></div>
+  </section>
+
+  <section id="dashboard" class="hidden">
+    <div class="panel">
+      <div class="topline"><div><h2 id="welcome">Available company data</h2><p class="sub" style="margin:6px 0 0">Choose a category, then fetch the records allowed for your role.</p></div><span id="roleLabel"></span></div>
+      <label for="category">Data category</label>
+      <select id="category">
+        <option value="/employees">Employee details</option>
+        <option value="/salary">Salary details</option>
+        <option value="/attendance">Attendance records</option>
+        <option value="/personal-data">Personal data</option>
+        <option value="/leaves">Leave records</option>
+        <option value="/performance">Performance reviews</option>
+        <option value="/departments">Departments</option>
+        <option value="/employee-projects">Employee projects</option>
+        <option value="/permissions">Access permissions</option>
+      </select>
+      <div class="actions"><button id="fetchBtn">Fetch data</button></div>
+      <div id="status" class="status hidden" role="status"></div>
+      <div id="results" class="tablewrap"></div>
+    </div>
+  </section>
+</main>
+<script>
+const API_BASE = "https://z7z4trtojb.execute-api.us-east-1.amazonaws.com";
+const accounts = {
+  E001: { password: "employee123", name: "Aarav Sharma", role: "EMPLOYEE" },
+  E002: { password: "manager123", name: "Diya Reddy", role: "MANAGER" }
+};
+let currentUser = null;
+
+const $ = id => document.getElementById(id);
+function showStatus(message, type="") {
+  const el = $("status");
+  el.textContent = message;
+  el.className = "status" + (type ? " " + type : "");
+  el.classList.remove("hidden");
+}
+function clearResults(){ $("results").innerHTML = ""; }
+
+$("loginForm").addEventListener("submit", event => {
+  event.preventDefault();
+  const id = $("employeeId").value.trim().toUpperCase();
+  const password = $("password").value;
+  const account = accounts[id];
+  if (!account || account.password !== password) {
+    $("loginMessage").textContent = "Invalid employee ID or password.";
+    $("loginMessage").className = "status error";
+    return;
+  }
+  currentUser = { id, ...account };
+  $("loginPanel").classList.add("hidden");
+  $("dashboard").classList.remove("hidden");
+  $("userInfo").classList.remove("hidden");
+  $("who").textContent = `${account.name} (${id})`;
+  $("welcome").textContent = `Hello, ${account.name}`;
+  $("roleLabel").textContent = account.role;
+  $("loginMessage").classList.add("hidden");
+  clearResults();
+  $("status").classList.add("hidden");
+});
+
+$("logoutBtn").addEventListener("click", () => {
+  currentUser = null;
+  $("dashboard").classList.add("hidden");
+  $("userInfo").classList.add("hidden");
+  $("loginPanel").classList.remove("hidden");
+  $("password").value = "";
+  clearResults();
+  $("status").classList.add("hidden");
+});
+
+$("fetchBtn").addEventListener("click", async () => {
+  if (!currentUser) return;
+  const path = $("category").value;
+  const url = `${API_BASE}${path}?employee_id=${encodeURIComponent(currentUser.id)}`;
+  $("fetchBtn").disabled = true;
+  $("fetchBtn").textContent = "Loading...";
+  clearResults();
+  showStatus("Contacting API...", "");
+  try {
+    // Simple GET request: no custom headers and no credentials.
+    const response = await fetch(url, { method: "GET", mode: "cors", credentials: "omit" });
+    const raw = await response.text();
+    let payload;
+    try { payload = JSON.parse(raw); } catch { payload = { message: raw }; }
+
+    if (response.status === 403) {
+      showStatus(payload.error || payload.message || "Access denied for your role.", "error");
+      return;
+    }
+    if (!response.ok) {
+      showStatus(`API returned HTTP ${response.status}: ${payload.error || payload.message || raw}`, "error");
+      return;
+    }
+    showStatus(`${payload.message || "Access granted"} · ${payload.total_records ?? 0} record(s)`, "success");
+    renderTable(payload.data || []);
+  } catch (error) {
+    showStatus(
+      `Browser could not read the API response.\n${error.message}\n\nThe API endpoint may still be returning HTTP 200, but its response must include Access-Control-Allow-Origin. Check API Gateway CORS deployment and the browser Network tab.`,
+      "error"
+    );
+    console.error("Company Data API request failed:", { url, error });
+  } finally {
+    $("fetchBtn").disabled = false;
+    $("fetchBtn").textContent = "Fetch data";
+  }
+});
+
+function renderTable(rows) {
+  const root = $("results");
+  if (!rows.length) {
+    root.innerHTML = '<div class="empty">No records returned.</div>';
+    return;
+  }
+  const columns = [...new Set(rows.flatMap(row => Object.keys(row)))];
+  const table = document.createElement("table");
+  const thead = document.createElement("thead");
+  const headerRow = document.createElement("tr");
+  columns.forEach(col => { const th=document.createElement("th"); th.textContent=col.replaceAll("_"," "); headerRow.appendChild(th); });
+  thead.appendChild(headerRow); table.appendChild(thead);
+  const tbody = document.createElement("tbody");
+  rows.forEach(row => {
+    const tr=document.createElement("tr");
+    columns.forEach(col => { const td=document.createElement("td"); td.textContent=row[col] ?? ""; tr.appendChild(td); });
+    tbody.appendChild(tr);
+  });
+  table.appendChild(tbody); root.appendChild(table);
+}
+</script>
+</body>
+</html>
